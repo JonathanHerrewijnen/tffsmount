@@ -3,6 +3,7 @@
 import kaitaistruct
 from kaitaistruct import KaitaiStruct, KaitaiStream, BytesIO
 import tffsmount.kaitai_process
+import base64
 
 
 if getattr(kaitaistruct, "API_VERSION", (0, 9)) < (0, 9):
@@ -141,7 +142,18 @@ class Parser(KaitaiStruct):
             self.atime_s = self._io.read_u8le()
             self.mtime_s = self._io.read_u8le()
             self.ctime_s = self._io.read_u8le()
-            self.name = (KaitaiStream.bytes_terminate(self._io.read_bytes(self.name_length), 0, False)).decode("utf-8")
+            self.name_bytes = self._io.read_bytes(self.name_length)
+            self.encryption_policy = None
+
+            if not self.is_dir:
+                self.padded_zero_space = self._io.read_bytes(16)
+                self.encryption_policy = Parser.FscryptPolicy(self._io, self, self._root)
+                self.some_four_bytes = self._io.read_bytes(4)
+
+            if self.encryption_policy.contents_encryption_mode == 1:
+                self.name = self.name_bytes.hex()
+            else:
+                self.name = (KaitaiStream.bytes_terminate(self.name_bytes, 0, False)).decode("utf-8")
 
         @property
         def first_cluster(self):
@@ -383,3 +395,17 @@ class Parser(KaitaiStruct):
             _process = tffsmount.kaitai_process.ClusterChain(self.i, self._root.boot.cam)
             self._m_data_chain = _process.decode(self._raw__m_data_chain)
             return getattr(self, "_m_data_chain", None)
+        
+    class FscryptPolicy(KaitaiStruct):
+        def __init__(self, _io, _parent=None, _root=None):
+            self._io = _io
+            self._parent = _parent
+            self._root = _root
+            self._read()
+
+        def _read(self):
+            self.version = self._io.read_u1()
+            self.contents_encryption_mode = self._io.read_u1()
+            self.filenames_encryption_mode = self._io.read_u1()
+            self.flags = self._io.read_u1()
+            self.master_key_descriptor = self._io.read_bytes(8)
