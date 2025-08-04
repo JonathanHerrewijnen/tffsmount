@@ -142,18 +142,18 @@ class Parser(KaitaiStruct):
             self.atime_s = self._io.read_u8le()
             self.mtime_s = self._io.read_u8le()
             self.ctime_s = self._io.read_u8le()
-            self.name_bytes = self._io.read_bytes(self.name_length)
+            name_bytes = self._io.read_bytes(self.name_length)
+            self.name = (KaitaiStream.bytes_terminate(name_bytes, 0, False)).decode("utf-8")
             self.encryption_policy = None
 
-            if not self.is_dir:
-                self.padded_zero_space = self._io.read_bytes(16)
-                self.encryption_policy = Parser.FscryptPolicy(self._io, self, self._root)
-                self.some_four_bytes = self._io.read_bytes(4)
+            # if not self.is_dir:
+            self.padded_zero_space = self._io.read_bytes(16)
+            self.some_four_bytes = self._io.read_bytes(4)
+            self.encryption_policy = Parser.FscryptPolicy(self._io, self, self._root)
+            self.name = (KaitaiStream.bytes_terminate(name_bytes, 0, False)).decode("utf-8")
 
             if self.encryption_policy.contents_encryption_mode == 1:
-                self.name = self.name_bytes.hex()
-            else:
-                self.name = (KaitaiStream.bytes_terminate(self.name_bytes, 0, False)).decode("utf-8")
+                print(f'There are encrypted files at/under {self.name}')
 
         @property
         def first_cluster(self):
