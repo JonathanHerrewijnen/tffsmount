@@ -8,6 +8,7 @@ from tffsmount.stream import Stream
 
 LOGGER = logging.getLogger(__name__)
 CRC = crcengine.create(poly=0x1EDC6F41, width=32, seed=0, ref_in=True, ref_out=True, name="tffs-crc32c", xor_out=0)
+LOOKUP_TABLE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+,"
 
 
 def hash(init_val, data):
@@ -19,7 +20,8 @@ def hash(init_val, data):
 
 
 def name_hash(name):
-    val = hash(0x8E113957, name.encode("utf-8"))
+    # val = hash(0x8E113957, name.encode("utf-8"))
+    val = hash(0x8E113957, name)
     return (val >> 0x10) ^ (val & 0xFFFF)
 
 
@@ -37,6 +39,39 @@ class TFFS:
         self.indirect_inodes = {
             entry.inode_number: entry for entry in self.read_dir(tffs_indirect_inodes, check_name_hash=False)
         }  # Name hashes are not populated in the $TFFS_Indirect_Inodes direntries
+
+    def custom_encode(byte_data: bytes) -> str:
+        encoded_str = ""
+        ac, bits = 0, 0
+        
+        for byte in byte_data:
+            ac += byte << bits
+            bits += 8
+            while bits >= 6:
+                encoded_str += LOOKUP_TABLE[ac & 0x3f]
+                ac >>= 6
+                bits -= 6
+                
+        if bits > 0:
+            encoded_str += LOOKUP_TABLE[ac & 0x3f]
+        
+        return encoded_str
+
+
+    def custom_decode(encoded_str: str) -> bytes:
+        reverse_table = {v: k for k, v in enumerate(LOOKUP_TABLE)}
+        decoded_bytes = bytearray()
+        ac, bits = 0, 0
+        
+        for char in encoded_str:
+            ac += reverse_table[char] << bits
+            bits += 6
+            while bits >= 8:
+                decoded_bytes.append(ac & 0xff)
+                ac >>= 8
+                bits -= 8
+        
+        return decoded_bytes
 
     def read_dir(self, dir_entry: Parser.Direntry, check_name_hash=True):
         assert dir_entry.is_dir, "Directory entry is not a directory"
@@ -72,7 +107,7 @@ class TFFS:
             return self.root
         parent_entry = self.get_dir_entry_from_path(path.parent)
         for entry in self.read_dir(parent_entry):
-            if entry.name == path.name:
+            if entry.name.decode('utf-8') == path.name:
                 if resolve_indirect and entry.is_indirect and entry.inode_number in self.indirect_inodes:
                     return self.indirect_inodes[entry.inode_number]
                 return entry

@@ -114,8 +114,15 @@ types:
         type: u8
       - id: name
         size: name_length
-        type: strz
-        encoding: 'utf-8'
+        #type: strz
+        #encoding: 'utf-8'
+      - id: padding
+        size: 0x20 - (name_length % 0x20)  # TODO check 0
+      - id: crypt_info
+        type: fscrypt_info
+      - id: crc 
+        type: u4
+
     instances:
       first_cluster:
         value: _root.boot.cam.entries[first_cluster_number]
@@ -125,6 +132,21 @@ types:
         value: "(flags & 0x4000 == 0x4000) ? true : false"
       is_dir:
         value: type.is_dir
+
+  fscrypt_info:
+    seq:
+      - id: encryption_version
+        type: u1
+      - id: filename_encryption_mode
+        type: u1
+      - id: content_encryption_mode
+        type: u1
+      - id: padding_flags
+        type: u1
+      - id: master_key_identifier
+        size: 8
+      - id: encryption_nonce
+        size: 16
 
   cam_entries:
     seq:

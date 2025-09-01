@@ -44,7 +44,11 @@ class FuseTFFS(Operations):
         dir_entry = self.tffs.get_dir_entry_from_path(path)
         for entry in self.tffs.read_dir(dir_entry):
             if entry.name and not (entry.name == "$TFFS_Indirect_Inodes" or entry.inode_number == 2):
-                yield entry.name
+                try:
+                    yield entry.name.decode('utf-8')
+                except:
+                    logging.debug(f'Custom Base64 encoding for {entry.name.hex()}')
+                    yield TFFS.custom_encode(entry.name)
 
     def read(self, path, size, offset, fh):
         LOGGER.debug(f"read({path}, {size}, {offset})")
